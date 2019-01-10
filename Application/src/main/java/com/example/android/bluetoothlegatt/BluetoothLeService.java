@@ -29,6 +29,7 @@ import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
@@ -65,6 +66,18 @@ public class BluetoothLeService extends Service {
 
     public final static UUID UUID_HEART_RATE_MEASUREMENT =
             UUID.fromString(SampleGattAttributes.HEART_RATE_MEASUREMENT);
+
+    public final static UUID UUID_FBL780_PIOREAD_NOTIFY =
+            UUID.fromString(SampleGattAttributes.FBL780_PIOREAD_NOTIFY);
+
+    public final static UUID UUID_FBL780_ADC0_NOTIFY =
+            UUID.fromString(SampleGattAttributes.FBL780_ADC0_NOTIFY);
+
+    public final static UUID UUID_FBL780_ADC1_NOTIFY =
+            UUID.fromString(SampleGattAttributes.FBL780_ADC1_NOTIFY);
+
+    public final static UUID UUID_FBL780_INIT_SETTING =
+            UUID.fromString(SampleGattAttributes.FBL780_INIT_SETTING);
 
     // Implements callback methods for GATT events that the app cares about.  For example,
     // connection change and services discovered.
@@ -121,6 +134,12 @@ public class BluetoothLeService extends Service {
 
     private void broadcastUpdate(final String action,
                                  final BluetoothGattCharacteristic characteristic) {
+        byte sendByte[] = new byte[22];
+        int sendCnt = 0;
+
+        sendByte[0] = 0;
+        sendByte[1] = 0;
+
         final Intent intent = new Intent(action);
 
         // This is special handling for the Heart Rate Measurement profile.  Data parsing is
@@ -139,7 +158,89 @@ public class BluetoothLeService extends Service {
             final int heartRate = characteristic.getIntValue(format, 1);
             Log.d(TAG, String.format("Received heart rate: %d", heartRate));
             intent.putExtra(EXTRA_DATA, String.valueOf(heartRate));
-        } else {
+        }else if (UUID_FBL780_INIT_SETTING.equals(characteristic.getUuid())) {
+            Log.d(TAG, "UUID_FBL780_INIT_SETTING");
+
+            sendByte[0] = 0x55;
+            sendByte[1] = 0x33;
+            sendCnt = 2;
+
+            // For all other profiles, writes the data formatted in HEX.
+            final byte[] data = characteristic.getValue();
+            if (data != null && data.length > 0) {
+                final StringBuilder stringBuilder = new StringBuilder(data.length);
+
+
+                for(byte byteChar : data){
+                    stringBuilder.append(String.format("%02X ", byteChar));
+                    sendByte[sendCnt++] = byteChar;
+                }
+                intent.putExtra("init", sendByte);
+                intent.putExtra(EXTRA_DATA, stringBuilder.toString());
+            }
+        }
+        else if (UUID_FBL780_PIOREAD_NOTIFY.equals(characteristic.getUuid())) {
+            Log.d(TAG, "UUID_FBL780_PIOREAD_NOTIFY");
+
+            sendByte[0] = 0x55;
+            sendByte[1] = 0x00;
+            sendCnt = 2;
+
+            // For all other profiles, writes the data formatted in HEX.
+            final byte[] data = characteristic.getValue();
+            if (data != null && data.length > 0) {
+                final StringBuilder stringBuilder = new StringBuilder(data.length);
+
+                for(byte byteChar : data){
+                    stringBuilder.append(String.format("%02X ", byteChar));
+                    sendByte[sendCnt++] = byteChar;
+                }
+                intent.putExtra("init", sendByte);
+                intent.putExtra(EXTRA_DATA, stringBuilder.toString());
+            }
+        }
+        else if (UUID_FBL780_ADC0_NOTIFY.equals(characteristic.getUuid())) {
+            Log.d(TAG, "UUID_FBL770_ADC0_NOTIFY");
+
+            sendByte[0] = 0x55;
+            sendByte[1] = 0x01;
+            sendCnt = 2;
+
+            // For all other profiles, writes the data formatted in HEX.
+            final byte[] data = characteristic.getValue();
+            if (data != null && data.length > 0) {
+                final StringBuilder stringBuilder = new StringBuilder(data.length);
+
+
+                for(byte byteChar : data){
+                    stringBuilder.append(String.format("%02X ", byteChar));
+                    sendByte[sendCnt++] = byteChar;
+                }
+                intent.putExtra("init", sendByte);
+                intent.putExtra(EXTRA_DATA, stringBuilder.toString());
+            }
+        }
+        else if (UUID_FBL780_ADC1_NOTIFY.equals(characteristic.getUuid())) {
+            Log.d(TAG, "UUID_FBL770_ADC1_NOTIFY");
+
+            sendByte[0] = 0x55;
+            sendByte[1] = 0x02;
+            sendCnt = 2;
+
+            // For all other profiles, writes the data formatted in HEX.
+            final byte[] data = characteristic.getValue();
+            if (data != null && data.length > 0) {
+                final StringBuilder stringBuilder = new StringBuilder(data.length);
+
+
+                for(byte byteChar : data){
+                    stringBuilder.append(String.format("%02X ", byteChar));
+                    sendByte[sendCnt++] = byteChar;
+                }
+                intent.putExtra("init", sendByte);
+                intent.putExtra(EXTRA_DATA, stringBuilder.toString());
+            }
+        }else {
             // For all other profiles, writes the data formatted in HEX.
             final byte[] data = characteristic.getValue();
             if (data != null && data.length > 0) {
@@ -283,12 +384,24 @@ public class BluetoothLeService extends Service {
         mBluetoothGatt.readCharacteristic(characteristic);
     }
 
-    public void writeCharacteristic(BluetoothGattCharacteristic characteristic) {
+    public void writeCharacteristic(BluetoothGattCharacteristic characteristic, byte dataValue) {
         if (mBluetoothAdapter == null || mBluetoothGatt == null) {
             Log.w(TAG, "BluetoothAdapter not initialized");
             return;
         }
-        mBluetoothGatt.writeCharacteristic(characteristic);
+        if (Build.VERSION.SDK_INT >= 21) {
+            mBluetoothGatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+        }
+        byte[] data = new byte[1];
+        data[0] = dataValue;
+
+        characteristic.setValue(data);
+        boolean status = mBluetoothGatt.writeCharacteristic(characteristic);
+
+        if (Build.VERSION.SDK_INT >= 21) {
+            mBluetoothGatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_BALANCED);
+        }
+        Log.d(TAG, "writeCharacteristic : " + status);
     }
 
     /**
@@ -309,6 +422,31 @@ public class BluetoothLeService extends Service {
         if (UUID_HEART_RATE_MEASUREMENT.equals(characteristic.getUuid())) {
             BluetoothGattDescriptor descriptor = characteristic.getDescriptor(
                     UUID.fromString(SampleGattAttributes.CLIENT_CHARACTERISTIC_CONFIG));
+            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            mBluetoothGatt.writeDescriptor(descriptor);
+        }
+
+        if (UUID_FBL780_PIOREAD_NOTIFY.equals(characteristic.getUuid())) {
+            Log.w(TAG, "UUID_FBL780_PIOREAD_NOTIFY ===========");
+            BluetoothGattDescriptor descriptor = characteristic.getDescriptor(
+                    UUID.fromString(SampleGattAttributes.CLIENT_CHARACTERISTIC_CONFIG));
+            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            mBluetoothGatt.writeDescriptor(descriptor);
+        }
+        if (UUID_FBL780_ADC0_NOTIFY.equals(characteristic.getUuid())) {
+
+            Log.w(TAG, "UUID_FBL780_ADC0_NOTIFY ===========");
+
+            BluetoothGattDescriptor descriptor = characteristic.getDescriptor(
+                    UUID.fromString(SampleGattAttributes.CLIENT_CHARACTERISTIC_CONFIG));
+            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            mBluetoothGatt.writeDescriptor(descriptor);
+        }
+        if (UUID_FBL780_ADC1_NOTIFY.equals(characteristic.getUuid())) {
+
+            Log.w(TAG, "UUID_FBL780_ADC1_NOTIFY ===========");
+
+            BluetoothGattDescriptor descriptor = characteristic.getDescriptor(UUID.fromString(SampleGattAttributes.CLIENT_CHARACTERISTIC_CONFIG));
             descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
             mBluetoothGatt.writeDescriptor(descriptor);
         }

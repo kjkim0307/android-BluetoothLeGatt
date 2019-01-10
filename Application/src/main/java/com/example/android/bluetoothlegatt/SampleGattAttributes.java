@@ -26,6 +26,17 @@ public class SampleGattAttributes {
     public static String HEART_RATE_MEASUREMENT = "00002a37-0000-1000-8000-00805f9b34fb";
     public static String CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb";
 
+    public static String HARDWARE_PARTNO = "003b002c-002d-2800-2a05-180a2a232a24";
+    public static String SERIAL_NUMBER = "002c002d-2800-2a05-180a-2a232a242a25";
+    public static String FIRMWARE_VERSION = "002d2800-2a05-180a-2a23-2a242a252a26";
+    public static String MANUFACTURE_NAME = "28002a05-180a-2a23-2a24-2a252a262a29";
+
+    // 가이드의 정보값 매칭하여 넣기.
+    public static String FBL780_PIOREAD_NOTIFY = "0000ffe1-0000-1000-8000-00805f9b34fb";
+    public static String FBL780_ADC0_NOTIFY = "0000ffd1-0000-1000-8000-00805f9b34fb";
+    public static String FBL780_ADC1_NOTIFY = "0000ffd2-0000-1000-8000-00805f9b34fb";
+    public static String FBL780_INIT_SETTING = "0000ffc1-0000-1000-8000-00805f9b34fb";
+
     static {
         // Sample Services.
         attributes.put("0000180d-0000-1000-8000-00805f9b34fb", "Heart Rate Service");
@@ -33,6 +44,11 @@ public class SampleGattAttributes {
         // Sample Characteristics.
         attributes.put(HEART_RATE_MEASUREMENT, "Heart Rate Measurement");
         attributes.put("00002a29-0000-1000-8000-00805f9b34fb", "Manufacturer Name String");
+
+        attributes.put(HARDWARE_PARTNO,"PCB Version");
+        attributes.put(SERIAL_NUMBER, "Serial Number");
+        attributes.put(FIRMWARE_VERSION, "Firmware Version");
+        attributes.put(MANUFACTURE_NAME, "Manufacture");
     }
 
     public static String lookup(String uuid, String defaultName) {

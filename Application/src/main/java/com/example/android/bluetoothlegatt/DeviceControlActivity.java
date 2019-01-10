@@ -17,6 +17,7 @@
 package com.example.android.bluetoothlegatt;
 
 import android.app.Activity;
+import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
 import android.content.BroadcastReceiver;
@@ -25,13 +26,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ExpandableListView;
+import android.widget.ImageView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
 
@@ -52,15 +58,25 @@ public class DeviceControlActivity extends Activity {
     public static final String EXTRAS_DEVICE_ADDRESS = "DEVICE_ADDRESS";
 
     private TextView mConnectionState;
+    private TextView mCommandField;
     private TextView mDataField;
+    private Button mIRON, mWhiteON, mOffAll, mFlash;
     private String mDeviceName;
     private String mDeviceAddress;
-    private ExpandableListView mGattServicesList;
     private BluetoothLeService mBluetoothLeService;
     private ArrayList<ArrayList<BluetoothGattCharacteristic>> mGattCharacteristics =
             new ArrayList<ArrayList<BluetoothGattCharacteristic>>();
     private boolean mConnected = false;
     private BluetoothGattCharacteristic mNotifyCharacteristic;
+
+    byte sendByte[] = new byte[20];
+    private ImageView iv1,iv2,iv3,iv4,iv5,iv6,iv7,iv8;
+    private byte portStatus;
+    private byte ledStatus = 0;
+    private byte pwmStatus;
+    private byte linklossStatus;
+    private byte adctimeHighStatus;
+    private byte adctimeLowStatus;
 
     private final String LIST_NAME = "NAME";
     private final String LIST_UUID = "UUID";
@@ -107,11 +123,69 @@ public class DeviceControlActivity extends Activity {
             } else if (BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
                 // Show all the supported services and characteristics on the user interface.
                 displayGattServices(mBluetoothLeService.getSupportedGattServices());
+                getDeviceSetting();
             } else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)) {
+                byte[] sendByte = intent.getByteArrayExtra("init");
+
+                if((sendByte[0] == 0x55) && (sendByte[1] == 0x33)){
+                    Log.d(TAG,"======= Init Setting Data ");
+                    updateCommandState("Init Data");
+
+                    portStatus = sendByte[2];
+                    pwmStatus = sendByte[3];
+                    linklossStatus = sendByte[4];
+
+                    adctimeHighStatus = sendByte[5];
+                    adctimeLowStatus = sendByte[6];
+
+                    setPortStatus(portStatus);
+                    //setPWMStatus(pwmStatus);
+                    //setAdcTimeStatus(adctimeHighStatus,adctimeLowStatus);
+
+                    ledStatus = (byte) 0xff;
+                    sendLedStatus();
+                }
+//                else if((sendByte[0] == 0x55) && (sendByte[1] == 0x00)){
+//                    Log.d(TAG,"======= PIO READ NOTIFY ");
+//                    updateCommandState("PIO READ");
+//                    byte notifyValue = sendByte[2];
+//                    //updateReadPort(notifyValue);
+//                }
+//                else if((sendByte[0] == 0x55) && (sendByte[1] == 0x01)){
+//                    Log.d(TAG,"======= ADC0 READ NOTIFY ");
+//                    updateCommandState("ADC READ");
+//                    byte notifyValue = sendByte[2];
+//                    updateADC0(notifyValue);
+//                }
+//                else if((sendByte[0] == 0x55) && (sendByte[1] == 0x02)){
+//                    Log.d(TAG,"======= ADC1 READ NOTIFY ");
+//                    updateCommandState("ADC READ");
+//                    byte notifyValue = sendByte[2];
+//                    updateADC1(notifyValue);
+//                }
+
                 displayData(intent.getStringExtra(BluetoothLeService.EXTRA_DATA));
             }
         }
     };
+
+
+    private void getDeviceSetting(){
+        if(mGattCharacteristics != null){
+            final BluetoothGattCharacteristic characteristic = mGattCharacteristics.get(6).get(0);
+            mBluetoothLeService.readCharacteristic(characteristic);
+        }
+    }
+
+    private void updateCommandState(final String str) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mCommandField.setText(str);
+            }
+        });
+    }
+
 
     // If a given GATT characteristic is selected, check for supported features.  This sample
     // demonstrates 'Read' and 'Notify' features.  See
@@ -148,7 +222,6 @@ public class DeviceControlActivity extends Activity {
     };
 
     private void clearUI() {
-        mGattServicesList.setAdapter((SimpleExpandableListAdapter) null);
         mDataField.setText(R.string.no_data);
     }
 
@@ -163,18 +236,87 @@ public class DeviceControlActivity extends Activity {
 
         // Sets up UI references.
         ((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
-        mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
-        mGattServicesList.setOnChildClickListener(servicesListClickListner);
         mConnectionState = (TextView) findViewById(R.id.connection_state);
+        mCommandField = (TextView) findViewById(R.id.command_value);
         mDataField = (TextView) findViewById(R.id.data_value);
+        final Handler mHandler = new Handler();
 
         getActionBar().setTitle(mDeviceName);
         getActionBar().setDisplayHomeAsUpEnabled(true);
         Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
         bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
 
-//        BluetoothGattCharacteristic characteristic = new
+        iv1 = (ImageView) findViewById(R.id.imageView1);
+        iv2 = (ImageView) findViewById(R.id.imageView2);
+        iv3 = (ImageView) findViewById(R.id.imageView3);
+        iv4 = (ImageView) findViewById(R.id.imageView4);
+        iv5 = (ImageView) findViewById(R.id.imageView5);
+        iv6 = (ImageView) findViewById(R.id.imageView6);
+        iv7 = (ImageView) findViewById(R.id.imageView7);
+        iv8 = (ImageView) findViewById(R.id.imageView8);
+
+        iv1.setOnTouchListener(onBtnTouchListener);
+        iv2.setOnTouchListener(onBtnTouchListener);
+        iv3.setOnTouchListener(onBtnTouchListener);
+        iv4.setOnTouchListener(onBtnTouchListener);
+        iv5.setOnTouchListener(onBtnTouchListener);
+        iv6.setOnTouchListener(onBtnTouchListener);
+        iv7.setOnTouchListener(onBtnTouchListener);
+        iv8.setOnTouchListener(onBtnTouchListener);
+
+        mIRON = (Button)findViewById(R.id.btn_ir_on);
+        mIRON.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                turnOnIR();
+            }
+        });
+        mWhiteON = (Button)findViewById(R.id.btn_led_on);
+        mWhiteON.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                turnOnLED();
+            }
+        });
+        mOffAll = (Button)findViewById(R.id.btn_off_all);
+        mOffAll.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                ledStatus = (byte)0xFF;
+                setPIOImg();
+                sendLedStatus();
+            }
+        });
+        mFlash = (Button)findViewById(R.id.btn_flash);
+        mFlash.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // LED 켜고, 300ms후에 IR킴
+                turnOnLED();
+                mHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        turnOnIR();
+                    }
+                }, 200);
+            }
+        });
     }
+
+    private void turnOnIR(){
+        // IR에 해당하는 0,2번 키고 나머지는 끄고.
+        ledStatus = (byte) 0xFA;
+        setPIOImg();
+        sendLedStatus();
+    }
+    private void turnOnLED(){
+        // LED에 해당하는 1,3번 키고 나머지는 끄고.
+        ledStatus = (byte) 0xF5;
+        setPIOImg();
+        sendLedStatus();
+    }
+
+
 
     @Override
     protected void onResume() {
@@ -297,7 +439,254 @@ public class DeviceControlActivity extends Activity {
                 new String[] {LIST_NAME, LIST_UUID},
                 new int[] { android.R.id.text1, android.R.id.text2 }
         );
-        mGattServicesList.setAdapter(gattServiceAdapter);
+    }
+
+    private View.OnTouchListener onBtnTouchListener = new View.OnTouchListener(){
+
+        public boolean onTouch(View v, MotionEvent $e)
+        {
+            switch ($e.getAction())
+            {
+                case MotionEvent.ACTION_DOWN:
+                    switch(v.getId()){
+                        case R.id.imageView1:
+                            if((portStatus & 0x01) == 0x01){
+                                if((ledStatus & 0x01) == 0x01){
+                                    iv1.setImageResource(R.drawable.zero);
+                                    ledStatus = (byte) (ledStatus & (~0x01));
+                                } else {
+                                    iv1.setImageResource(R.drawable.one);
+                                    ledStatus = (byte) (ledStatus | 0x01);
+                                }
+                            }
+                            break;
+                        case R.id.imageView2:
+                            if((portStatus & 0x02) == 0x02){
+                                if((ledStatus & 0x02) == 0x02){
+                                    iv2.setImageResource(R.drawable.zero);
+                                    ledStatus = (byte) (ledStatus & (~0x02));
+                                } else {
+                                    iv2.setImageResource(R.drawable.one);
+                                    ledStatus = (byte) (ledStatus | 0x02);
+                                }
+                            }
+                            break;
+                        case R.id.imageView3:
+                            if((portStatus & 0x04) == 0x04){
+                                if((ledStatus & 0x04) == 0x04){
+                                    iv3.setImageResource(R.drawable.zero);
+                                    ledStatus = (byte) (ledStatus & (~0x04));
+                                } else {
+                                    iv3.setImageResource(R.drawable.one);
+                                    ledStatus = (byte) (ledStatus | 0x04);
+                                }
+                            }
+                            break;
+                        case R.id.imageView4:
+                            if((portStatus & 0x08) == 0x08){
+                                if((ledStatus & 0x08) == 0x08){
+                                    iv4.setImageResource(R.drawable.zero);
+                                    ledStatus = (byte) (ledStatus & (~0x08));
+                                } else {
+                                    iv4.setImageResource(R.drawable.one);
+                                    ledStatus = (byte) (ledStatus | 0x08);
+                                }
+                            }
+                            break;
+                        case R.id.imageView5:
+                            if((portStatus & 0x10) == 0x10){
+                                if((ledStatus & 0x10) == 0x10){
+                                    iv5.setImageResource(R.drawable.zero);
+                                    ledStatus = (byte) (ledStatus & (~0x10));
+                                } else {
+                                    iv5.setImageResource(R.drawable.one);
+                                    ledStatus = (byte) (ledStatus | 0x10);
+                                }
+                            }
+                            break;
+                        case R.id.imageView6:
+                            if((portStatus & 0x20) == 0x20){
+                                if((ledStatus & 0x20) == 0x20){
+                                    iv6.setImageResource(R.drawable.zero);
+                                    ledStatus = (byte) (ledStatus & (~0x20));
+                                } else {
+                                    iv6.setImageResource(R.drawable.one);
+                                    ledStatus = (byte) (ledStatus | 0x20);
+                                }
+                            }
+                            break;
+                        case R.id.imageView7:
+                            if((portStatus & 0x40) == 0x40){
+                                if((ledStatus & 0x40) == 0x40){
+                                    iv7.setImageResource(R.drawable.zero);
+                                    ledStatus = (byte) (ledStatus & (~0x40));
+                                } else {
+                                    iv7.setImageResource(R.drawable.one);
+                                    ledStatus = (byte) (ledStatus | 0x40);
+                                }
+                            }
+                            break;
+                        case R.id.imageView8:
+                            if((portStatus & 0x80) == 0x80){
+                                if((ledStatus & 0x80) == 0x80){
+                                    iv8.setImageResource(R.drawable.zero);
+                                    ledStatus = (byte) (ledStatus & (~0x80));
+                                } else {
+                                    iv8.setImageResource(R.drawable.one);
+                                    ledStatus = (byte) (ledStatus | 0x80);
+                                }
+                            }
+                            break;
+                    }
+                    sendLedStatus();
+                    break;
+                case MotionEvent.ACTION_UP:
+                    break;
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        }
+    };
+
+    private void setPIOImg(){
+        iv1.setImageResource(R.drawable.one);
+        iv2.setImageResource(R.drawable.one);
+        iv3.setImageResource(R.drawable.one);
+        iv4.setImageResource(R.drawable.one);
+        iv5.setImageResource(R.drawable.one);
+        iv6.setImageResource(R.drawable.one);
+        iv7.setImageResource(R.drawable.one);
+        iv8.setImageResource(R.drawable.one);
+
+        if((ledStatus & 0x01) != 0x01)
+            iv1.setImageResource(R.drawable.zero);
+
+        if((ledStatus & 0x02) != 0x02)
+            iv2.setImageResource(R.drawable.zero);
+
+        if((ledStatus & 0x04) != 0x04)
+            iv3.setImageResource(R.drawable.zero);
+
+        if((ledStatus & 0x08) != 0x08)
+            iv4.setImageResource(R.drawable.zero);
+
+        if((ledStatus & 0x10) != 0x10)
+            iv5.setImageResource(R.drawable.zero);
+
+        if((ledStatus & 0x20) != 0x20)
+            iv6.setImageResource(R.drawable.zero);
+
+        if((ledStatus & 0x40) != 0x40)
+            iv7.setImageResource(R.drawable.zero);
+
+        if((ledStatus & 0x80) != 0x80)
+            iv8.setImageResource(R.drawable.zero);
+    }
+
+    private void sendLedStatus(){
+        if(mGattCharacteristics != null){
+            final BluetoothGattCharacteristic characteristic = mGattCharacteristics.get(4).get(1);
+            mBluetoothLeService.writeCharacteristic(characteristic, ledStatus);
+            updateCommandState("Send PIO");
+            displayData(bytesToHex(ledStatus));
+        }
+    }
+
+
+    private void setPortStatus(byte status){
+
+        if((status & 0x80) == 0x80){
+            iv8.setImageResource(R.drawable.one);
+            iv8.setVisibility(View.VISIBLE);
+        }
+
+        if((status & 0x40) == 0x40){
+            iv7.setImageResource(R.drawable.one);
+            iv7.setVisibility(View.VISIBLE);
+        }
+
+        if((status & 0x20) == 0x20){
+            iv6.setImageResource(R.drawable.one);
+            iv6.setVisibility(View.VISIBLE);
+        }
+        if((status & 0x10) == 0x10){
+            iv5.setImageResource(R.drawable.one);
+            iv5.setVisibility(View.VISIBLE);
+        }
+        if((status & 0x08) == 0x08){
+            iv4.setImageResource(R.drawable.one);
+            iv4.setVisibility(View.VISIBLE);
+        }
+
+        if((status & 0x04) == 0x04){
+            iv3.setImageResource(R.drawable.one);
+            iv3.setVisibility(View.VISIBLE);
+        }
+
+        if((status & 0x02) == 0x02){
+            iv2.setImageResource(R.drawable.one);
+            iv2.setVisibility(View.VISIBLE);
+        }
+        if((status & 0x01) == 0x01){
+            iv1.setImageResource(R.drawable.one);
+            iv1.setVisibility(View.VISIBLE);
+        }
+
+        Handler mHandler = new Handler();
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                // notification enable
+                final BluetoothGattCharacteristic characteristic = mGattCharacteristics.get(4).get(0);
+                mBluetoothLeService.setCharacteristicNotification(characteristic, true);
+            }
+        }, 1000);
+
+
+        Handler mHandler2 = new Handler();
+        mHandler2.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                // notification enable
+                final BluetoothGattCharacteristic characteristicADC0 = mGattCharacteristics.get(5).get(0);
+                mBluetoothLeService.setCharacteristicNotification(characteristicADC0, true);
+            }
+        }, 2000);
+
+        Handler mHandler3 = new Handler();
+        mHandler3.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                // notification enable
+                final BluetoothGattCharacteristic characteristicADC1 = mGattCharacteristics.get(5).get(1);
+                mBluetoothLeService.setCharacteristicNotification(characteristicADC1, true);
+            }
+        }, 3000);
+    }
+
+    final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
+    public static String bytesToHex(byte[] bytes) {
+        char[] hexChars = new char[bytes.length * 3];
+        for ( int j = 0; j < bytes.length; j++ ) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 3] = hexArray[v >>> 4];
+            hexChars[j * 3 + 1] = hexArray[v & 0x0F];
+            hexChars[j * 3 + 2] = ' ';
+        }
+        return new String(hexChars);
+    }
+
+    public static String bytesToHex(byte bytedata) {
+        char[] hexChars = new char[2];
+
+        int v = bytedata & 0xFF;
+        hexChars[0] = hexArray[v >>> 4];
+        hexChars[1] = hexArray[v & 0x0F];
+
+        return new String(hexChars);
     }
 
     private static IntentFilter makeGattUpdateIntentFilter() {
