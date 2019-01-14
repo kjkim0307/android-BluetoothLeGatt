@@ -16,6 +16,7 @@
 
 package com.example.android.bluetoothlegatt;
 
+import android.Manifest;
 import android.app.Activity;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
@@ -26,10 +27,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -51,7 +56,7 @@ import java.util.List;
  * communicates with {@code BluetoothLeService}, which in turn interacts with the
  * Bluetooth LE API.
  */
-public class DeviceControlActivity extends Activity {
+public class DeviceControlActivity extends AppCompatActivity {
     private final static String TAG = DeviceControlActivity.class.getSimpleName();
 
     public static final String EXTRAS_DEVICE_NAME = "DEVICE_NAME";
@@ -80,6 +85,9 @@ public class DeviceControlActivity extends Activity {
 
     private final String LIST_NAME = "NAME";
     private final String LIST_UUID = "UUID";
+
+    private CameraBasicFragment mCameraBasicFragment;
+    private static final int REQUEST_WRITE_PERMISSION = 2;
 
     // Code to manage Service lifecycle.
     private final ServiceConnection mServiceConnection = new ServiceConnection() {
@@ -145,24 +153,6 @@ public class DeviceControlActivity extends Activity {
                     ledStatus = (byte) 0xff;
                     sendLedStatus();
                 }
-//                else if((sendByte[0] == 0x55) && (sendByte[1] == 0x00)){
-//                    Log.d(TAG,"======= PIO READ NOTIFY ");
-//                    updateCommandState("PIO READ");
-//                    byte notifyValue = sendByte[2];
-//                    //updateReadPort(notifyValue);
-//                }
-//                else if((sendByte[0] == 0x55) && (sendByte[1] == 0x01)){
-//                    Log.d(TAG,"======= ADC0 READ NOTIFY ");
-//                    updateCommandState("ADC READ");
-//                    byte notifyValue = sendByte[2];
-//                    updateADC0(notifyValue);
-//                }
-//                else if((sendByte[0] == 0x55) && (sendByte[1] == 0x02)){
-//                    Log.d(TAG,"======= ADC1 READ NOTIFY ");
-//                    updateCommandState("ADC READ");
-//                    byte notifyValue = sendByte[2];
-//                    updateADC1(notifyValue);
-//                }
 
                 displayData(intent.getStringExtra(BluetoothLeService.EXTRA_DATA));
             }
@@ -241,8 +231,8 @@ public class DeviceControlActivity extends Activity {
         mDataField = (TextView) findViewById(R.id.data_value);
         final Handler mHandler = new Handler();
 
-        getActionBar().setTitle(mDeviceName);
-        getActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setTitle(mDeviceName);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
         bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
 
@@ -292,26 +282,48 @@ public class DeviceControlActivity extends Activity {
             @Override
             public void onClick(View v) {
                 // LED 켜고, 300ms후에 IR킴
-                turnOnLED();
+                if (mCameraBasicFragment != null) {
+                    mCameraBasicFragment.takePicture();
+                }
+                mHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        turnOnLED();
+                    }
+                }, 550);
                 mHandler.postDelayed(new Runnable() {
                     @Override
                     public void run() {
                         turnOnIR();
                     }
-                }, 200);
+                }, 850);
             }
         });
+        mCameraBasicFragment = null;
+        if (null == savedInstanceState) {
+            mCameraBasicFragment = CameraBasicFragment.newInstance();
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.container, mCameraBasicFragment)
+                    .commit();
+        }
+
+        if(ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED){
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    REQUEST_WRITE_PERMISSION);
+        }
+
     }
 
     private void turnOnIR(){
-        // IR에 해당하는 0,2번 키고 나머지는 끄고.
-        ledStatus = (byte) 0xFA;
+        // IR에 해당하는 5번 키고 나머지는 끄고.
+        ledStatus = (byte) 0xDF;
         setPIOImg();
         sendLedStatus();
     }
     private void turnOnLED(){
-        // LED에 해당하는 1,3번 키고 나머지는 끄고.
-        ledStatus = (byte) 0xF5;
+        // LED에 해당하는 6번 키고 나머지는 끄고.
+        ledStatus = (byte) 0xBF;
         setPIOImg();
         sendLedStatus();
     }
@@ -696,5 +708,22 @@ public class DeviceControlActivity extends Activity {
         intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
         intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
         return intentFilter;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_WRITE_PERMISSION:
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // 권한 허가
+                    // 해당 권한을 사용해서 작업을 진행할 수 있습니다
+                } else {
+                    // 권한 거부
+                    // 사용자가 해당권한을 거부했을때 해주어야 할 동작을 수행합니다
+                }
+                return;
+        }
     }
 }
