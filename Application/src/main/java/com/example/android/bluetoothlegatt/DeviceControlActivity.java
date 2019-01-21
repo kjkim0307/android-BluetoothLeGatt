@@ -150,7 +150,7 @@ public class DeviceControlActivity extends AppCompatActivity {
                     //setPWMStatus(pwmStatus);
                     //setAdcTimeStatus(adctimeHighStatus,adctimeLowStatus);
 
-                    ledStatus = (byte) 0xff;
+                    ledStatus = (byte) 0x00;
                     sendLedStatus();
                 }
 
