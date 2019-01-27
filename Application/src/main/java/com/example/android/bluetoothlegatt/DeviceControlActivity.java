@@ -152,6 +152,7 @@ public class DeviceControlActivity extends AppCompatActivity {
 
                     ledStatus = (byte) 0x00;
                     sendLedStatus();
+                    setPIOImg();
                 }
 
                 displayData(intent.getStringExtra(BluetoothLeService.EXTRA_DATA));
@@ -272,7 +273,7 @@ public class DeviceControlActivity extends AppCompatActivity {
         mOffAll.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                ledStatus = (byte)0xFF;
+                ledStatus = (byte)0x00;
                 setPIOImg();
                 sendLedStatus();
             }
@@ -284,19 +285,21 @@ public class DeviceControlActivity extends AppCompatActivity {
                 // LED 켜고, 300ms후에 IR킴
                 if (mCameraBasicFragment != null) {
                     mCameraBasicFragment.takePicture();
+
+
                 }
                 mHandler.postDelayed(new Runnable() {
                     @Override
                     public void run() {
                         turnOnLED();
                     }
-                }, 550);
+                }, 850);
                 mHandler.postDelayed(new Runnable() {
                     @Override
                     public void run() {
                         turnOnIR();
                     }
-                }, 850);
+                }, 1150);
             }
         });
         mCameraBasicFragment = null;
@@ -317,13 +320,13 @@ public class DeviceControlActivity extends AppCompatActivity {
 
     private void turnOnIR(){
         // IR에 해당하는 5번 키고 나머지는 끄고.
-        ledStatus = (byte) 0xDF;
+        ledStatus = (byte) 0x20;
         setPIOImg();
         sendLedStatus();
     }
     private void turnOnLED(){
         // LED에 해당하는 6번 키고 나머지는 끄고.
-        ledStatus = (byte) 0xBF;
+        ledStatus = (byte) 0x40;
         setPIOImg();
         sendLedStatus();
     }
@@ -573,28 +576,28 @@ public class DeviceControlActivity extends AppCompatActivity {
         iv7.setImageResource(R.drawable.one);
         iv8.setImageResource(R.drawable.one);
 
-        if((ledStatus & 0x01) != 0x01)
+        if((ledStatus & 0x01) == 0x00)
             iv1.setImageResource(R.drawable.zero);
 
-        if((ledStatus & 0x02) != 0x02)
+        if((ledStatus & 0x02) == 0x00)
             iv2.setImageResource(R.drawable.zero);
 
-        if((ledStatus & 0x04) != 0x04)
+        if((ledStatus & 0x04) == 0x00)
             iv3.setImageResource(R.drawable.zero);
 
-        if((ledStatus & 0x08) != 0x08)
+        if((ledStatus & 0x08) == 0x00)
             iv4.setImageResource(R.drawable.zero);
 
-        if((ledStatus & 0x10) != 0x10)
+        if((ledStatus & 0x10) == 0x00)
             iv5.setImageResource(R.drawable.zero);
 
-        if((ledStatus & 0x20) != 0x20)
+        if((ledStatus & 0x20) == 0x00)
             iv6.setImageResource(R.drawable.zero);
 
-        if((ledStatus & 0x40) != 0x40)
+        if((ledStatus & 0x40) == 0x00)
             iv7.setImageResource(R.drawable.zero);
 
-        if((ledStatus & 0x80) != 0x80)
+        if((ledStatus & 0x80) == 0x00)
             iv8.setImageResource(R.drawable.zero);
     }
 

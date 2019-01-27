@@ -25,6 +25,7 @@ import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -52,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -112,6 +114,9 @@ public class CameraBasicFragment extends Fragment
      * Max preview height that is guaranteed by Camera2 API
      */
     private static final int MAX_PREVIEW_HEIGHT = 1080;
+
+    private static boolean isBurst = false;
+    private static int maxBurstImage = 10;
 
     /**
      * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a
@@ -176,6 +181,7 @@ public class CameraBasicFragment extends Fragment
             // This method is called when the camera is opened.  We start camera preview here.
             mCameraOpenCloseLock.release();
             mCameraDevice = cameraDevice;
+
             createCameraPreviewSession();
         }
 
@@ -497,7 +503,7 @@ public class CameraBasicFragment extends Fragment
                         Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
                         new CompareSizesByArea());
                 mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(),
-                        ImageFormat.JPEG, /*maxImages*/2);
+                        ImageFormat.JPEG, /*maxImages*/maxBurstImage);
                 mImageReader.setOnImageAvailableListener(
                         mOnImageAvailableListener, mBackgroundHandler);
 
@@ -597,7 +603,20 @@ public class CameraBasicFragment extends Fragment
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
+
             manager.openCamera(mCameraId, mStateCallback, mBackgroundHandler);
+
+            if(Build.VERSION.SDK_INT > 21) {
+                CameraCharacteristics chars = manager.getCameraCharacteristics(mCameraId);
+                Iterator<CaptureRequest.Key<?>> it = chars.getAvailableCaptureRequestKeys().iterator();
+                while(it.hasNext()){
+                    Log.d("TAG", "key - "+it.next().getName());
+                }
+
+
+                if(chars.getAvailableCaptureRequestKeys().contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BURST_CAPTURE))
+                    isBurst = true;
+            }
         } catch (CameraAccessException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
@@ -671,7 +690,6 @@ public class CameraBasicFragment extends Fragment
             mPreviewRequestBuilder
                     = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             mPreviewRequestBuilder.addTarget(surface);
-
             // Here, we create a CameraCaptureSession for camera preview.
             mCameraDevice.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()),
                     new CameraCaptureSession.StateCallback() {
@@ -764,8 +782,25 @@ public class CameraBasicFragment extends Fragment
                     CameraMetadata.CONTROL_AF_TRIGGER_START);
             // Tell #mCaptureCallback to wait for the lock.
             mState = STATE_WAITING_LOCK;
-            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
-                    mBackgroundHandler);
+
+
+            if(isBurst == false){
+                mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
+                        mBackgroundHandler);
+            }else{
+                //mCaptureSession.captureBurst()
+                List<CaptureRequest> list = new ArrayList<>();
+                CaptureRequest req = mPreviewRequestBuilder.build();
+                list.add(req);
+                list.add(req);
+                list.add(req);
+                list.add(req);
+                list.add(req);
+                mCaptureSession.captureBurst(list, mCaptureCallback,
+                        mBackgroundHandler);
+                Toast.makeText(getActivity(), "burst!", Toast.LENGTH_SHORT).show();
+            }
+
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
@@ -788,6 +823,48 @@ public class CameraBasicFragment extends Fragment
             e.printStackTrace();
         }
     }
+
+    private void captureBurstPicture(){
+        try {
+            final Activity activity = getActivity();
+            if (null == activity || null == mCameraDevice) {
+                return;
+            }
+            // This is the CaptureRequest.Builder that we use to take a picture.
+            final CaptureRequest.Builder captureBuilder =
+                    mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            captureBuilder.addTarget(mImageReader.getSurface());
+
+            // Use the same AE and AF modes as the preview.
+            captureBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                    CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+            setAutoFlash(captureBuilder);
+
+            // Orientation
+            int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
+            captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
+
+            CameraCaptureSession.CaptureCallback CaptureCallback
+                    = new CameraCaptureSession.CaptureCallback() {
+
+                @Override
+                public void onCaptureCompleted(@NonNull CameraCaptureSession session,
+                                               @NonNull CaptureRequest request,
+                                               @NonNull TotalCaptureResult result) {
+                    showToast("Saved: " + mFile);
+                    Log.d(TAG, mFile.toString());
+                    unlockFocus();
+                }
+            };
+
+            mCaptureSession.stopRepeating();
+            mCaptureSession.abortCaptures();
+            mCaptureSession.capture(captureBuilder.build(), CaptureCallback, null);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     /**
      * Capture a still picture. This method should be called when we get a response in
